@@ -1,0 +1,265 @@
+from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from userauths.models import User, UserProfile
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer for User model"""
+    full_name = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'username', 'first_name', 'last_name', 
+            'full_name', 'user_type', 'phone_number', 'age', 
+            'is_active', 'date_joined', 'last_login'
+        ]
+        read_only_fields = ['id', 'is_active', 'date_joined', 'last_login']
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    """Serializer for user registration"""
+    password = serializers.CharField(write_only=True, min_length=8)
+    password_confirm = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = [
+            'email', 'username', 'first_name', 'last_name', 
+            'user_type', 'phone_number', 'age', 'password', 'password_confirm'
+        ]
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'password_confirm': {'write_only': True}
+        }
+    
+    def validate_email(self, value):
+        """Validate email uniqueness"""
+        if User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value.lower()
+    
+    def validate_username(self, value):
+        """Validate username uniqueness"""
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+    
+    def validate_password(self, value):
+        """Validate password strength"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+    
+    def validate(self, attrs):
+        """Validate password confirmation"""
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        return attrs
+    
+    def create(self, validated_data):
+        """Create user with validated data"""
+        validated_data.pop('password_confirm')
+        user = User.objects.create_user(**validated_data)
+        return user
+
+class UserLoginSerializer(serializers.Serializer):
+    """Serializer for user login"""
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    
+    def validate_email(self, value):
+        """Validate email format"""
+        return value.lower()
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    """Serializer for UserProfile model"""
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_username = serializers.CharField(source='user.username', read_only=True)
+    display_name = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'id', 'user', 'user_email', 'user_username', 'image', 'full_name',
+            'country', 'about', 'date_of_birth', 'first_name', 'last_name',
+            'gender', 'age', 'user_type', 'phone_number', 'display_name',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'user', 'user_email', 'user_username', 'display_name', 'created_at', 'updated_at']
+    
+    def validate_image(self, value):
+        """Validate image file"""
+        if value:
+            # Check file size (5MB limit)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("Image file size must be less than 5MB.")
+            
+            # Check file type
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+            if value.content_type not in allowed_types:
+                raise serializers.ValidationError("Only JPEG, PNG and GIF images are allowed.")
+        
+        return value
+    
+    def validate_age(self, value):
+        """Validate age"""
+        if value and (value < 0 or value > 150):
+            raise serializers.ValidationError("Age must be between 0 and 150.")
+        return value
+
+class PasswordResetSerializer(serializers.Serializer):
+    """Serializer for password reset request"""
+    email = serializers.EmailField()
+    
+    def validate_email(self, value):
+        """Validate email exists"""
+        if not User.objects.filter(email=value.lower()).exists():
+            raise serializers.ValidationError("No user found with this email address.")
+        return value.lower()
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Serializer for password reset confirmation"""
+    email = serializers.EmailField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    new_password_confirm = serializers.CharField(min_length=8, write_only=True)
+    
+    def validate_email(self, value):
+        """Validate email format"""
+        return value.lower()
+    
+    def validate_otp(self, value):
+        """Validate OTP format"""
+        if not value.isdigit():
+            raise serializers.ValidationError("OTP must contain only digits.")
+        return value
+    
+    def validate_new_password(self, value):
+        """Validate new password strength"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+    
+    def validate(self, attrs):
+        """Validate password confirmation"""
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        return attrs
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Serializer for changing password"""
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    new_password_confirm = serializers.CharField(min_length=8, write_only=True)
+    
+    def validate_old_password(self, value):
+        """Validate old password"""
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Invalid old password.")
+        return value
+    
+    def validate_new_password(self, value):
+        """Validate new password strength"""
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(e.messages)
+        return value
+    
+    def validate(self, attrs):
+        """Validate password confirmation"""
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        return attrs
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating user profile (partial updates)"""
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'image', 'full_name', 'country', 'about', 'date_of_birth',
+            'first_name', 'last_name', 'gender', 'age', 'user_type', 'phone_number'
+        ]
+    
+    def validate_image(self, value):
+        """Validate image file"""
+        if value:
+            # Check file size (5MB limit)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("Image file size must be less than 5MB.")
+            
+            # Check file type
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+            if value.content_type not in allowed_types:
+                raise serializers.ValidationError("Only JPEG, PNG and GIF images are allowed.")
+        
+        return value
+    
+    def validate_age(self, value):
+        """Validate age"""
+        if value and (value < 0 or value > 150):
+            raise serializers.ValidationError("Age must be between 0 and 150.")
+        return value
+
+class UserListSerializer(serializers.ModelSerializer):
+    """Serializer for listing users (public info only)"""
+    full_name = serializers.ReadOnlyField()
+    profile_image = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'user_type', 'profile_image']
+    
+    def get_profile_image(self, obj):
+        """Get profile image URL if available"""
+        try:
+            if obj.profile.image:
+                return self.context['request'].build_absolute_uri(obj.profile.image.url)
+        except UserProfile.DoesNotExist:
+            pass
+        return None 
+
+class MobileTokenObtainSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    otp = serializers.CharField(required=False, max_length=6, min_length=6)
+
+    def validate_phone_number(self, value):
+        if not User.objects.filter(phone_number=value).exists():
+            raise serializers.ValidationError("No user found with this phone number.")
+        return value
+
+class MobilePasswordResetSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+
+    def validate_phone_number(self, value):
+        if not User.objects.filter(phone_number=value).exists():
+            raise serializers.ValidationError("No user found with this phone number.")
+        return value
+
+class MobilePasswordResetConfirmSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    new_password_confirm = serializers.CharField(min_length=8, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        return attrs
+
+class MobileChangePasswordSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+    otp = serializers.CharField(max_length=6, min_length=6)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    new_password_confirm = serializers.CharField(min_length=8, write_only=True)
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        return attrs 
