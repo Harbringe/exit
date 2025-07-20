@@ -28,9 +28,13 @@ MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
 MAILGUN_FROM_EMAIL = os.environ.get('MAILGUN_FROM_EMAIL')
 
 # SendGrid configuration
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
 SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL')
 SENDGRID_FROM_NAME = os.environ.get('SENDGRID_FROM_NAME')
+
+# Razorpay configuration
+RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -46,10 +50,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
-
-
+ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
@@ -260,10 +261,54 @@ SIMPLE_JWT = {
 }
 
 
-# CSRF_TRUSTED_ORIGINS = []
-# CORS_ALLOWED_ORIGINS = []    
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 CORS_ALLOW_CREDENTIALS = True
-CORS_ORIGIN_ALLOW_ALL = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",      # React Native development
+    "http://localhost:3001",      # Next.js development
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    # "https://vauice-backend.onrender.com",
+    # React Native Expo development servers
+    "http://localhost:8081",      # Expo development server
+    "http://127.0.0.1:8081",      # Expo development server (alternative)
+    "http://localhost:19006",     # Expo web
+    "http://127.0.0.1:19006",     # Expo web (alternative)
+    "exp://localhost:8081",       # Expo Go app
+    "exp://127.0.0.1:8081",       # Expo Go app (alternative)
+    "exp://192.168.57.30:8081",   # Your specific IP (from your terminal)
+    "http://192.168.57.30:8081",
+    "http://192.168.57.30:8000",
+    "exp://192.168.101.7:8081",
+    "http://192.168.101.7:8081",
+    "http://192.168.101.7:8000",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://vauice-backend.onrender.com/',
+    'http://127.0.0.1:3000/'
+]
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CORS_ALLOWED_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
 # Email Configuration (for password reset)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development

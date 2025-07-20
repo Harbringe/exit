@@ -21,6 +21,8 @@ from twilio.rest import Client
 import requests
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To, HtmlContent, Content
+from core.models import Wallet, Transaction
+import razorpay
 
 # Utility function to send SMS via Twilio
 def send_otp_sms(phone_number, otp):
@@ -85,6 +87,13 @@ from .serializers import (
     MobilePasswordResetSerializer,
     MobilePasswordResetConfirmSerializer,
     MobileChangePasswordSerializer,
+    WalletCreateSerializer,
+    WalletDepositSerializer,
+    WalletWithdrawSerializer,
+    WalletBalanceSerializer,
+    WalletGenerateOtpSerializer,
+    WalletRazorpayDepositInitiateSerializer,
+    WalletRazorpayDepositConfirmSerializer,
 )
 
 # Custom function to add user info to token
@@ -673,3 +682,316 @@ class MobileChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         # Placeholder: implement OTP check and password change
         return Response({'detail': 'Mobile change password placeholder'}, status=status.HTTP_200_OK)
+
+class WalletGenerateOtpView(APIView):
+    @swagger_auto_schema(
+        operation_description="Generate OTP for wallet creation. Accepts JSON: { 'phone_number': '...' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='User phone number'),
+            },
+            required=['phone_number'],
+        ),
+        responses={
+            200: openapi.Response(description="OTP sent to phone number"),
+            400: "Invalid phone number",
+        }
+    )
+    def post(self, request):
+        serializer = WalletGenerateOtpSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone_number = serializer.validated_data['phone_number']
+        from userauths.models import User
+        user = User.objects.get(phone_number=phone_number)
+        # Generate OTP
+        import random, string
+        otp = ''.join(random.choices(string.digits, k=6))
+        user.otp = otp
+        user.save()
+        # Optionally: Save OTP in a temp Wallet object (not created yet, so just keep in user)
+        sent = send_otp_sms(phone_number, otp)
+        if sent:
+            return Response({'message': 'OTP sent to your phone number.'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'error': 'Failed to send OTP. Please try again.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class WalletCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Create a new wallet. Accepts JSON: { 'user': 'id or email', 'pin': '123456', 'confirm_pin': '123456', 'otp': 'xxxxxx' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'user': openapi.Schema(type=openapi.TYPE_STRING, description='User ID or email'),
+                'pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN'),
+                'confirm_pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN (confirm)'),
+                'otp': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit OTP'),
+            },
+            required=['user', 'pin', 'confirm_pin', 'otp'],
+        ),
+        responses={
+            201: openapi.Response(description="Wallet created successfully"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user_obj']
+        pin = serializer.validated_data['pin']
+        wallet = Wallet.objects.create(user=user, pin=pin)
+        # Optionally clear OTP after use
+        user.otp = None
+        user.save()
+        return Response({
+            'message': 'Wallet created successfully',
+            'wallet_id': wallet.wallet_id,
+            'balance': str(wallet.balance),
+            'status': wallet.status,
+            'created_at': wallet.created_at,
+        }, status=status.HTTP_201_CREATED)
+
+class WalletDepositView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Deposit funds into a wallet. Accepts JSON: { 'wallet_id': '...', 'amount': 100, 'pin': '123456' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'wallet_id': openapi.Schema(type=openapi.TYPE_STRING, description='Wallet ID'),
+                'amount': openapi.Schema(type=openapi.TYPE_NUMBER, description='Amount to deposit'),
+                'pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN'),
+            },
+            required=['wallet_id', 'amount', 'pin'],
+        ),
+        responses={
+            200: openapi.Response(description="Deposit successful"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletDepositSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wallet.deposit(amount)
+            Transaction.objects.create(
+                wallet=wallet,
+                amount=amount,
+                transaction_type='deposit',
+                status='completed',
+                description='Deposit to wallet',
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Deposit successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
+
+class WalletWithdrawView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Withdraw funds from a wallet. Accepts JSON: { 'wallet_id': '...', 'amount': 50, 'pin': '123456' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'wallet_id': openapi.Schema(type=openapi.TYPE_STRING, description='Wallet ID'),
+                'amount': openapi.Schema(type=openapi.TYPE_NUMBER, description='Amount to withdraw'),
+                'pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN'),
+            },
+            required=['wallet_id', 'amount', 'pin'],
+        ),
+        responses={
+            200: openapi.Response(description="Withdrawal successful"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletWithdrawSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wallet.withdraw(amount)
+            Transaction.objects.create(
+                wallet=wallet,
+                amount=amount,
+                transaction_type='withdraw',
+                status='completed',
+                description='Withdraw from wallet',
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Withdrawal successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
+
+class WalletTransactionListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="List recent transactions for a wallet. Accepts query param: wallet_id=...",
+        manual_parameters=[
+            openapi.Parameter('wallet_id', openapi.IN_QUERY, description="Wallet ID", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: openapi.Response(description="List of recent transactions"),
+            400: "Invalid input",
+        }
+    )
+    def get(self, request):
+        wallet_id = request.query_params.get('wallet_id')
+        if not wallet_id:
+            return Response({'error': 'wallet_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        transactions = wallet.transactions.order_by('-created_at')[:20]
+        data = [
+            {
+                'amount': str(tx.amount),
+                'transaction_type': tx.transaction_type,
+                'status': tx.status,
+                'reference': tx.reference,
+                'description': tx.description,
+                'created_at': tx.created_at,
+            }
+            for tx in transactions
+        ]
+        return Response({'transactions': data}, status=status.HTTP_200_OK)
+
+class WalletBalanceView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Check wallet balance. Accepts query params: wallet_id=...&pin=123456",
+        manual_parameters=[
+            openapi.Parameter('wallet_id', openapi.IN_QUERY, description="Wallet ID", type=openapi.TYPE_STRING, required=True),
+            openapi.Parameter('pin', openapi.IN_QUERY, description="6-digit wallet PIN", type=openapi.TYPE_STRING, required=True),
+        ],
+        responses={
+            200: openapi.Response(description="Wallet balance returned"),
+            400: "Invalid input",
+        }
+    )
+    def get(self, request):
+        serializer = WalletBalanceSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'balance': str(wallet.balance), 'status': wallet.status}, status=status.HTTP_200_OK)
+
+class WalletRazorpayDepositInitiateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Initiate a Razorpay deposit. Accepts JSON: { 'wallet_id': '...', 'amount': 100, 'pin': '123456' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'wallet_id': openapi.Schema(type=openapi.TYPE_STRING, description='Wallet ID'),
+                'amount': openapi.Schema(type=openapi.TYPE_NUMBER, description='Amount to deposit'),
+                'pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN'),
+            },
+            required=['wallet_id', 'amount', 'pin'],
+        ),
+        responses={
+            200: openapi.Response(description="Razorpay order created"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletRazorpayDepositInitiateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        order_data = {
+            'amount': int(amount * 100),  # Razorpay expects paise
+            'currency': 'INR',
+            'receipt': f'wallet_{wallet.wallet_id}_{wallet.user.id}',
+            'payment_capture': 1,
+        }
+        order = client.order.create(data=order_data)
+        return Response({
+            'order_id': order['id'],
+            'amount': order['amount'],
+            'currency': order['currency'],
+            'wallet_id': wallet.wallet_id,
+            'razorpay_key_id': settings.RAZORPAY_KEY_ID,
+        }, status=status.HTTP_200_OK)
+
+class WalletRazorpayDepositConfirmView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Confirm a Razorpay deposit. Accepts JSON: { 'wallet_id': '...', 'payment_id': '...', 'order_id': '...', 'signature': '...' }",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'wallet_id': openapi.Schema(type=openapi.TYPE_STRING, description='Wallet ID'),
+                'payment_id': openapi.Schema(type=openapi.TYPE_STRING, description='Razorpay payment ID'),
+                'order_id': openapi.Schema(type=openapi.TYPE_STRING, description='Razorpay order ID'),
+                'signature': openapi.Schema(type=openapi.TYPE_STRING, description='Razorpay signature'),
+            },
+            required=['wallet_id', 'payment_id', 'order_id', 'signature'],
+        ),
+        responses={
+            200: openapi.Response(description="Deposit confirmed and wallet credited"),
+            400: "Invalid input or payment verification failed",
+        }
+    )
+    def post(self, request):
+        serializer = WalletRazorpayDepositConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        payment_id = serializer.validated_data['payment_id']
+        order_id = serializer.validated_data['order_id']
+        signature = serializer.validated_data['signature']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        try:
+            client.utility.verify_payment_signature({
+                'razorpay_order_id': order_id,
+                'razorpay_payment_id': payment_id,
+                'razorpay_signature': signature,
+            })
+        except razorpay.errors.SignatureVerificationError:
+            return Response({'error': 'Payment signature verification failed.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Fetch payment to get amount
+        payment = client.payment.fetch(payment_id)
+        amount = int(payment['amount']) / 100  # Convert paise to rupees/points
+        wallet.deposit(amount)
+        Transaction.objects.create(
+            wallet=wallet,
+            amount=amount,
+            transaction_type='deposit',
+            status='completed',
+            description=f'Razorpay deposit, payment_id: {payment_id}',
+        )
+        return Response({'message': 'Deposit successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)

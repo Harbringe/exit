@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from userauths.models import User, UserProfile
+from core.models import Wallet
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
@@ -251,3 +252,68 @@ class MobileChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['new_password_confirm']:
             raise serializers.ValidationError("Passwords don't match.")
         return attrs 
+
+class WalletGenerateOtpSerializer(serializers.Serializer):
+    phone_number = serializers.CharField()
+
+    def validate_phone_number(self, value):
+        from userauths.models import User
+        if not User.objects.filter(phone_number=value).exists():
+            raise serializers.ValidationError('No user found with this phone number.')
+        return value
+
+class WalletCreateSerializer(serializers.Serializer):
+    user = serializers.CharField()
+    pin = serializers.CharField(min_length=6, max_length=6)
+    confirm_pin = serializers.CharField(min_length=6, max_length=6)
+    otp = serializers.CharField(max_length=6, min_length=6)
+
+    def validate(self, attrs):
+        user_value = attrs.get('user')
+        otp = attrs.get('otp')
+        pin = attrs.get('pin')
+        confirm_pin = attrs.get('confirm_pin')
+        from userauths.models import User
+        user = None
+        if user_value.isdigit():
+            user = User.objects.filter(id=user_value).first()
+        else:
+            user = User.objects.filter(email=user_value.lower()).first()
+        if not user:
+            raise serializers.ValidationError('User not found.')
+        if not otp or user.otp != otp:
+            raise serializers.ValidationError('Invalid OTP.')
+        if pin != confirm_pin:
+            raise serializers.ValidationError('PINs do not match.')
+        attrs['user_obj'] = user
+        return attrs
+
+    def validate_pin(self, value):
+        if not value.isdigit() or len(value) != 6:
+            raise serializers.ValidationError('PIN must be a 6-digit number.')
+        return value
+
+class WalletDepositSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6)
+
+class WalletWithdrawSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6)
+
+class WalletBalanceSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    pin = serializers.CharField(min_length=6, max_length=6) 
+
+class WalletRazorpayDepositInitiateSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6)
+
+class WalletRazorpayDepositConfirmSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    payment_id = serializers.CharField()
+    order_id = serializers.CharField()
+    signature = serializers.CharField() 
