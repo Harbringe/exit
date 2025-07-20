@@ -137,10 +137,6 @@ class UserProfile(models.Model):
         """Return the best available name for display"""
         if self.full_name:
             return self.full_name
-        elif self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name}"
-        elif self.first_name:
-            return self.first_name
         else:
             return self.user.email
 

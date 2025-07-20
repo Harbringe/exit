@@ -125,7 +125,6 @@ class UserRegistrationView(APIView):
                                 'email': openapi.Schema(type=openapi.TYPE_STRING),
                                 'user_type': openapi.Schema(type=openapi.TYPE_STRING),
                                 'phone_number': openapi.Schema(type=openapi.TYPE_STRING),
-                                'otp': openapi.Schema(type=openapi.TYPE_STRING),
                                 'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
                                 'is_active': openapi.Schema(type=openapi.TYPE_BOOLEAN),
                                 'is_staff': openapi.Schema(type=openapi.TYPE_BOOLEAN),

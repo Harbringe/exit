@@ -7,7 +7,7 @@ class UserProfileInline(admin.StackedInline):
     can_delete = False
     verbose_name_plural = 'Profile'
     fk_name = 'user'
-    fields = ('image', 'full_name', 'country', 'about', 'date_of_birth', 'first_name', 'last_name', 'gender', 'age', 'user_type', 'phone_number')
+    fields = ('image', 'full_name', 'country', 'about', 'date_of_birth', 'gender', 'age', 'user_type', 'phone_number')
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -43,12 +43,12 @@ class CustomUserAdmin(UserAdmin):
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'display_name', 'country', 'gender', 'user_type', 'created_at')
     list_filter = ('user_type', 'gender', 'country', 'created_at')
-    search_fields = ('user__email', 'user__phone_number', 'full_name', 'first_name', 'last_name', 'country')
+    search_fields = ('user__email', 'user__phone_number', 'full_name', 'country')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('User Information', {'fields': ('user',)}),
-        ('Personal Information', {'fields': ('image', 'full_name', 'first_name', 'last_name', 'gender', 'age', 'date_of_birth')}),
+        ('Personal Information', {'fields': ('image', 'full_name', 'gender', 'age', 'date_of_birth')}),
         ('Contact Information', {'fields': ('phone_number', 'country')}),
         ('Account Information', {'fields': ('user_type', 'about')}),
         ('Timestamps', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
