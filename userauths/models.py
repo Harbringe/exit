@@ -8,13 +8,9 @@ import uuid
 # Create your models here.
 
 class CustomUserManager(BaseUserManager):
-    def create_user(self, email, username, first_name, user_type, phone_number, password=None, **extra_fields):
+    def create_user(self, email, user_type, phone_number, password=None, **extra_fields):
         if not email:
             raise ValueError('The Email field must be set')
-        if not username:
-            raise ValueError('The Username field must be set')
-        if not first_name:
-            raise ValueError('The First Name field must be set')
         if not user_type:
             raise ValueError('The User Type field must be set')
         if not phone_number:
@@ -23,8 +19,6 @@ class CustomUserManager(BaseUserManager):
         email = self.normalize_email(email)
         user = self.model(
             email=email,
-            username=username,
-            first_name=first_name,
             user_type=user_type,
             phone_number=phone_number,
             **extra_fields
@@ -33,7 +27,7 @@ class CustomUserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, username, first_name, phone_number, password=None, **extra_fields):
+    def create_superuser(self, email, phone_number, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('user_type', 'admin')
@@ -44,7 +38,7 @@ class CustomUserManager(BaseUserManager):
             raise ValueError('Superuser must have is_superuser=True.')
         
         user_type = extra_fields.pop('user_type', 'admin')
-        return self.create_user(email, username, first_name, user_type, phone_number, password, **extra_fields)
+        return self.create_user(email, user_type, phone_number, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
     USER_TYPE_CHOICES = [
@@ -61,8 +55,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         
     # Authentication and security fields
     otp = models.CharField(max_length=6, blank=True, null=True, verbose_name="OTP")
-    refresh_token = models.TextField(blank=True, null=True, verbose_name="Refresh Token")
-    
+    refresh_token = models.TextField(blank=True, null=True, verbose_name="Refresh Token") 
+
     # Django auth fields
     is_active = models.BooleanField(default=True, verbose_name="Active")
     is_staff = models.BooleanField(default=False, verbose_name="Staff Status")
@@ -72,7 +66,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     objects = CustomUserManager()
     
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'user_type', 'phone_number']
+    REQUIRED_FIELDS = ['user_type', 'phone_number']
     
     class Meta:
         verbose_name = "User"

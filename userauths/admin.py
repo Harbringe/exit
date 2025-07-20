@@ -11,14 +11,14 @@ class UserProfileInline(admin.StackedInline):
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('id', 'email', 'username', 'first_name', 'last_name', 'full_name', 'user_type', 'phone_number', 'is_active', 'date_joined')
+    list_display = ('id', 'email', 'user_type', 'phone_number', 'is_active', 'date_joined')
     list_filter = ('user_type', 'is_active', 'is_staff', 'date_joined')
-    search_fields = ('email', 'username', 'first_name', 'last_name', 'phone_number')
+    search_fields = ('email', 'phone_number')
     ordering = ('-date_joined',)
     
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('username', 'first_name', 'last_name', 'age', 'phone_number')}),
+        ('Personal info', {'fields': ('phone_number',)}),
         ('Account Type', {'fields': ('user_type',)}),
         ('Security', {'fields': ('otp', 'refresh_token')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -28,7 +28,7 @@ class CustomUserAdmin(UserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'username', 'first_name', 'last_name', 'user_type', 'phone_number', 'age', 'password1', 'password2'),
+            'fields': ('email', 'user_type', 'phone_number', 'password1', 'password2'),
         }),
     )
     
@@ -43,7 +43,7 @@ class CustomUserAdmin(UserAdmin):
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'display_name', 'country', 'gender', 'user_type', 'created_at')
     list_filter = ('user_type', 'gender', 'country', 'created_at')
-    search_fields = ('user__email', 'user__username', 'full_name', 'first_name', 'last_name', 'country')
+    search_fields = ('user__email', 'user__phone_number', 'full_name', 'first_name', 'last_name', 'country')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (

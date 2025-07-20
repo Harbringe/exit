@@ -75,7 +75,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'country', 'about', 'date_of_birth', 'gender', 'user_type', 'phone_number', 'display_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'user_email', 'user_username', 'display_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'user_email', 'display_name', 'created_at', 'updated_at']
     
     def validate_image(self, value):
         """Validate image file"""
@@ -202,7 +202,7 @@ class UserListSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'full_name', 'user_type', 'profile_image']
+        fields = ['id', 'email', 'user_type', 'profile_image']
     
     def get_profile_image(self, obj):
         """Get profile image URL if available"""
