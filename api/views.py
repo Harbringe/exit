@@ -123,22 +123,16 @@ class UserRegistrationView(APIView):
                             properties={
                                 'id': openapi.Schema(type=openapi.TYPE_INTEGER),
                                 'email': openapi.Schema(type=openapi.TYPE_STRING),
-                                'username': openapi.Schema(type=openapi.TYPE_STRING),
-                                'first_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                'last_name': openapi.Schema(type=openapi.TYPE_STRING),
-                                'full_name': openapi.Schema(type=openapi.TYPE_STRING),
                                 'user_type': openapi.Schema(type=openapi.TYPE_STRING),
                                 'phone_number': openapi.Schema(type=openapi.TYPE_STRING),
-                                'age': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'otp': openapi.Schema(type=openapi.TYPE_STRING),
+                                'refresh_token': openapi.Schema(type=openapi.TYPE_STRING),
+                                'is_active': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'is_staff': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'date_joined': openapi.Schema(type=openapi.TYPE_STRING),
+                                'last_login': openapi.Schema(type=openapi.TYPE_STRING),
                             }
                         ),
-                        'tokens': openapi.Schema(
-                            type=openapi.TYPE_OBJECT,
-                            properties={
-                                'access': openapi.Schema(type=openapi.TYPE_STRING),
-                                'refresh': openapi.Schema(type=openapi.TYPE_STRING),
-                            }
-                        )
                     }
                 )
             ),
@@ -149,19 +143,10 @@ class UserRegistrationView(APIView):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            
-            # Generate tokens
-            refresh = RefreshToken.for_user(user)
-            
             return Response({
                 'message': 'User registered successfully',
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'access': str(refresh.access_token),
-                    'refresh': str(refresh),
-                }
+                'user': UserSerializer(user).data
             }, status=status.HTTP_201_CREATED)
-        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class UserLoginView(APIView):

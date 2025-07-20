@@ -5,16 +5,13 @@ from userauths.models import User, UserProfile
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
-    full_name = serializers.ReadOnlyField()
-    
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'username', 'first_name', 'last_name', 
-            'full_name', 'user_type', 'phone_number', 'age', 
-            'is_active', 'date_joined', 'last_login'
+            'id', 'email', 'user_type', 'phone_number', 'otp', 'refresh_token',
+            'is_active', 'is_staff', 'date_joined', 'last_login'
         ]
-        read_only_fields = ['id', 'is_active', 'date_joined', 'last_login']
+        read_only_fields = ['id', 'is_active', 'is_staff', 'date_joined', 'last_login']
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     """Serializer for user registration"""
@@ -24,8 +21,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'email', 'username', 'first_name', 'last_name', 
-            'user_type', 'phone_number', 'age', 'password', 'password_confirm'
+            'email', 'user_type', 'phone_number', 'password', 'password_confirm'
         ]
         extra_kwargs = {
             'password': {'write_only': True},
@@ -37,12 +33,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if User.objects.filter(email=value.lower()).exists():
             raise serializers.ValidationError("A user with this email already exists.")
         return value.lower()
-    
-    def validate_username(self, value):
-        """Validate username uniqueness"""
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError("A user with this username already exists.")
-        return value
     
     def validate_password(self, value):
         """Validate password strength"""
@@ -76,15 +66,13 @@ class UserLoginSerializer(serializers.Serializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for UserProfile model"""
     user_email = serializers.EmailField(source='user.email', read_only=True)
-    user_username = serializers.CharField(source='user.username', read_only=True)
     display_name = serializers.ReadOnlyField()
     
     class Meta:
         model = UserProfile
         fields = [
-            'id', 'user', 'user_email', 'user_username', 'image', 'full_name',
-            'country', 'about', 'date_of_birth', 'first_name', 'last_name',
-            'gender', 'age', 'user_type', 'phone_number', 'display_name',
+            'id', 'user', 'user_email', 'image', 'full_name',
+            'country', 'about', 'date_of_birth', 'gender', 'user_type', 'phone_number', 'display_name',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'user', 'user_email', 'user_username', 'display_name', 'created_at', 'updated_at']

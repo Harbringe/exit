@@ -55,18 +55,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     # Auto-incrementing ID field
     id = models.AutoField(primary_key=True)
-    
-    # Required fields
-    first_name = models.CharField(max_length=50, verbose_name="First Name")
-    last_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="Last Name")
-    username = models.CharField(max_length=50, unique=True, verbose_name="Username")
     email = models.EmailField(unique=True, verbose_name="Email Address")
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, verbose_name="User Type")
     phone_number = models.CharField(max_length=15, verbose_name="Phone Number")
-    
-    # Optional fields
-    age = models.PositiveIntegerField(blank=True, null=True, verbose_name="Age")
-    
+        
     # Authentication and security fields
     otp = models.CharField(max_length=6, blank=True, null=True, verbose_name="OTP")
     refresh_token = models.TextField(blank=True, null=True, verbose_name="Refresh Token")
@@ -80,7 +72,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     objects = CustomUserManager()
     
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'user_type', 'phone_number']
+    REQUIRED_FIELDS = ['username', 'user_type', 'phone_number']
     
     class Meta:
         verbose_name = "User"
@@ -89,20 +81,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def __str__(self):
         return self.email
-    
-    @property
-    def full_name(self):
-        """Concatenate first name and last name"""
-        if self.last_name:
-            return f"{self.first_name} {self.last_name}"
-        return self.first_name
-    
-    def get_full_name(self):
-        return self.full_name
-    
-    def get_short_name(self):
-        return self.first_name
-    
+
+
+
     def save(self, *args, **kwargs):
         # Ensure email is always lowercase
         self.email = self.email.lower()
@@ -131,8 +112,6 @@ class UserProfile(models.Model):
     country = models.CharField(max_length=100, blank=True, null=True, verbose_name="Country")
     about = models.TextField(blank=True, null=True, verbose_name="About")
     date_of_birth = models.DateField(blank=True, null=True, verbose_name="Date of Birth")
-    first_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="First Name")
-    last_name = models.CharField(max_length=50, blank=True, null=True, verbose_name="Last Name")
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, blank=True, null=True, verbose_name="Gender")
     age = models.PositiveIntegerField(blank=True, null=True, verbose_name="Age")
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, blank=True, null=True, verbose_name="User Type")
@@ -152,18 +131,10 @@ class UserProfile(models.Model):
     
     def save(self, *args, **kwargs):
         # Auto-populate fields from user if not set
-        if not self.full_name and self.user:
-            self.full_name = self.user.full_name
-        if not self.first_name and self.user:
-            self.first_name = self.user.first_name
-        if not self.last_name and self.user:
-            self.last_name = self.user.last_name
         if not self.user_type and self.user:
             self.user_type = self.user.user_type
         if not self.phone_number and self.user:
             self.phone_number = self.user.phone_number
-        if not self.age and self.user:
-            self.age = self.user.age
             
         super().save(*args, **kwargs)
     
