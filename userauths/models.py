@@ -52,7 +52,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, verbose_name="Email Address")
     user_type = models.CharField(max_length=10, choices=USER_TYPE_CHOICES, verbose_name="User Type")
     phone_number = models.CharField(max_length=15, verbose_name="Phone Number")
-        
+    
+    # New onboarding status field
+    onboardingStatus = models.BooleanField(default=False, verbose_name="Onboarding Status")
+    
     # Authentication and security fields
     otp = models.CharField(max_length=6, blank=True, null=True, verbose_name="OTP")
     refresh_token = models.TextField(blank=True, null=True, verbose_name="Refresh Token") 
@@ -75,8 +78,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def __str__(self):
         return self.email
-
-
 
     def save(self, *args, **kwargs):
         # Ensure email is always lowercase

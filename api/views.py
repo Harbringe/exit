@@ -97,6 +97,7 @@ from .serializers import (
     WalletGenerateOtpSerializer,
     WalletRazorpayDepositInitiateSerializer,
     WalletRazorpayDepositConfirmSerializer,
+    OnboardingSerializer,
 )
 
 # Custom function to add user info to token
@@ -106,6 +107,7 @@ from api.serializers import UserSerializer
 def get_tokens_for_user_with_userinfo(user):
     refresh = RefreshToken.for_user(user)
     user_data = UserSerializer(user).data
+    user_data['onboardingStatus'] = user.onboardingStatus
     # Add user info to both tokens
     for token in (refresh, refresh.access_token):
         token['user'] = user_data
@@ -292,6 +294,48 @@ class UserProfileView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except UserProfile.DoesNotExist:
             return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
+
+class OnboardingView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Onboard user profile. Only allowed if onboardingStatus is False.",
+        request_body=OnboardingSerializer,
+        responses={
+            200: openapi.Response(
+                description="Onboarding successful",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                        'profile': openapi.Schema(type=openapi.TYPE_OBJECT),
+                        'onboardingStatus': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    }
+                )
+            ),
+            400: "Bad Request",
+            403: "Onboarding already completed"
+        }
+    )
+    def put(self, request):
+        user = request.user
+        if user.onboardingStatus:
+            return Response({'error': 'Onboarding already completed.'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            profile = user.profile
+        except UserProfile.DoesNotExist:
+            return Response({'error': 'Profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = OnboardingSerializer(profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            user.onboardingStatus = True
+            user.save()
+            return Response({
+                'message': 'Onboarding successful',
+                'profile': serializer.data,
+                'onboardingStatus': user.onboardingStatus
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetView(APIView):
     """

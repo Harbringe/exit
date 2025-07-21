@@ -317,3 +317,20 @@ class WalletRazorpayDepositConfirmSerializer(serializers.Serializer):
     payment_id = serializers.CharField()
     order_id = serializers.CharField()
     signature = serializers.CharField() 
+
+class OnboardingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            'image', 'full_name', 'country', 'about', 'date_of_birth', 'gender', 'age'
+        ]
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['full_name'].required = True
+        self.fields['image'].required = True
+        self.fields['date_of_birth'].required = True
+        self.fields['gender'].required = True
+        self.fields['country'].required = False
+        self.fields['about'].required = False
+        self.fields['age'].required = False 

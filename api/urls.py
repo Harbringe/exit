@@ -22,6 +22,7 @@ urlpatterns = [
 
     # User profile management
     path('user/profile/<int:user_id>/', views.UserProfileView.as_view(), name='profile'),
+    path('user/onboarding/', views.OnboardingView.as_view(), name='user_onboarding'),
 
     # Wallet endpoints
     path('wallet/generate-otp/', views.WalletGenerateOtpView.as_view(), name='wallet_generate_otp'),
