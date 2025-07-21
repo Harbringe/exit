@@ -129,9 +129,17 @@ from api.serializers import UserSerializer
 
 def get_tokens_for_user_with_userinfo(user):
     refresh = RefreshToken.for_user(user)
-    user_data = UserSerializer(user).data
-    user_data['onboardingStatus'] = user.onboardingStatus
-    # Add user info to both tokens
+    # Only include selected fields in the user data (no onboardingStatus)
+    user_data = {
+        'id': user.id,
+        'email': user.email,
+        'user_type': user.user_type,
+        'phone_number': user.phone_number,
+        'is_active': user.is_active,
+        'is_staff': user.is_staff,
+        'date_joined': user.date_joined.isoformat() if user.date_joined else None,
+        'last_login': user.last_login.isoformat() if user.last_login else None,
+    }
     for token in (refresh, refresh.access_token):
         token['user'] = user_data
     return {
@@ -1193,3 +1201,23 @@ class EventRSVPListView(generics.ListAPIView):
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+class CheckOnboardingStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Check onboarding status of the logged-in user.",
+        responses={
+            200: openapi.Response(
+                description="Onboarding status returned",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'onboardingStatus': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    }
+                )
+            )
+        }
+    )
+    def get(self, request):
+        return Response({'onboardingStatus': request.user.onboardingStatus}, status=status.HTTP_200_OK)
