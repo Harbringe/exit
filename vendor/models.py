@@ -8,6 +8,12 @@ import shortuuid
 def generate_vendor_id():
     return shortuuid.uuid()
 
+class Category(models.Model):
+    name = models.CharField(max_length=64, unique=True)
+
+    def __str__(self):
+        return self.name
+
 class VendorProfile(models.Model):
     vendor_id = models.CharField(max_length=22, unique=True, null=True, blank=True)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='vendor_profile')
@@ -20,6 +26,7 @@ class VendorProfile(models.Model):
     kyc_verified = models.BooleanField(default=False)
     approved = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, related_name='vendors')
 
     def save(self, *args, **kwargs):
         if not self.vendor_id:
@@ -36,3 +43,34 @@ class VendorProfile(models.Model):
 
     def __str__(self):
         return self.business_name or str(self.user)
+
+class KYC(models.Model):
+    DOCUMENT_TYPE_CHOICES = [
+        ('passport', 'Passport'),
+        ('driver_license', 'Driver License'),
+        ('national_id', 'National ID'),
+        ('other', 'Other'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='kyc_records')
+    document_type = models.CharField(max_length=32, choices=DOCUMENT_TYPE_CHOICES)
+    document_number = models.CharField(max_length=64)
+    document_file = models.FileField(upload_to='kyc_documents/')
+    verified = models.BooleanField(default=False)
+    verified_on = models.DateTimeField(blank=True, null=True)
+    submitted_on = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"KYC {self.document_type} for {self.user}"
+
+class Product(models.Model):
+    vendor = models.ForeignKey(VendorProfile, on_delete=models.CASCADE, related_name='products')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    price_tokens = models.PositiveIntegerField()
+    stock = models.PositiveIntegerField()
+    image = models.ImageField(upload_to='product_images/', blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.vendor})"
