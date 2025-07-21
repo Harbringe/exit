@@ -33,4 +33,5 @@ urlpatterns = [
     path('wallet/transactions/', views.WalletTransactionListView.as_view(), name='wallet_transactions'),
     path('wallet/deposit/initiate/', views.WalletRazorpayDepositInitiateView.as_view(), name='wallet_deposit_initiate'),
     path('wallet/deposit/confirm/', views.WalletRazorpayDepositConfirmView.as_view(), name='wallet_deposit_confirm'),
+    path('wallet/id/', views.GetWalletIdView.as_view(), name='wallet_id'),
 ] 

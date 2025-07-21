@@ -199,6 +199,9 @@ class UserLoginView(APIView):
             user = authenticate(request, email=email, password=password)
             if user:
                 tokens = get_tokens_for_user_with_userinfo(user)
+                # Save the refresh token to the user model
+                user.refresh_token = tokens['refresh']
+                user.save()
                 return Response({
                     'message': 'Login successful',
                     'tokens': tokens
@@ -643,6 +646,9 @@ class MobileTokenObtainView(APIView):
         user.otp = None
         user.save()
         tokens = get_tokens_for_user_with_userinfo(user)
+        # Save the refresh token to the user model
+        user.refresh_token = tokens['refresh']
+        user.save()
         return Response({
             'message': 'Login successful',
             'tokens': tokens
@@ -731,32 +737,25 @@ class MobileChangePasswordView(APIView):
         return Response({'detail': 'Mobile change password placeholder'}, status=status.HTTP_200_OK)
 
 class WalletGenerateOtpView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
     @swagger_auto_schema(
-        operation_description="Generate OTP for wallet creation. Accepts JSON: { 'phone_number': '...' }",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            properties={
-                'phone_number': openapi.Schema(type=openapi.TYPE_STRING, description='User phone number'),
-            },
-            required=['phone_number'],
-        ),
+        operation_description="Generate OTP for wallet creation. Sends OTP to the logged-in user's phone number.",
         responses={
             200: openapi.Response(description="OTP sent to phone number"),
-            400: "Invalid phone number",
+            400: "No phone number on user profile",
+            500: "Failed to send OTP"
         }
     )
     def post(self, request):
-        serializer = WalletGenerateOtpSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        phone_number = serializer.validated_data['phone_number']
-        from userauths.models import User
-        user = User.objects.get(phone_number=phone_number)
+        user = request.user
+        phone_number = user.phone_number
+        if not phone_number:
+            return Response({'error': 'No phone number associated with this user.'}, status=status.HTTP_400_BAD_REQUEST)
         # Generate OTP
         import random, string
         otp = ''.join(random.choices(string.digits, k=6))
         user.otp = otp
         user.save()
-        # Optionally: Save OTP in a temp Wallet object (not created yet, so just keep in user)
         sent = send_otp_sms(phone_number, otp)
         if sent:
             return Response({'message': 'OTP sent to your phone number.'}, status=status.HTTP_200_OK)
@@ -766,16 +765,15 @@ class WalletGenerateOtpView(APIView):
 class WalletCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     @swagger_auto_schema(
-        operation_description="Create a new wallet. Accepts JSON: { 'user': 'id or email', 'pin': '123456', 'confirm_pin': '123456', 'otp': 'xxxxxx' }",
+        operation_description="Create a new wallet. Accepts JSON: { 'pin': '123456', 'confirm_pin': '123456', 'otp': 'xxxxxx' } (user is taken from the logged-in user)",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'user': openapi.Schema(type=openapi.TYPE_STRING, description='User ID or email'),
                 'pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN'),
                 'confirm_pin': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit wallet PIN (confirm)'),
                 'otp': openapi.Schema(type=openapi.TYPE_STRING, description='6-digit OTP'),
             },
-            required=['user', 'pin', 'confirm_pin', 'otp'],
+            required=['pin', 'confirm_pin', 'otp'],
         ),
         responses={
             201: openapi.Response(description="Wallet created successfully"),
@@ -783,10 +781,22 @@ class WalletCreateView(APIView):
         }
     )
     def post(self, request):
-        serializer = WalletCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.validated_data['user_obj']
-        pin = serializer.validated_data['pin']
+        from core.models import Wallet
+        data = request.data.copy()
+        user = request.user
+        # Validate OTP
+        otp = data.get('otp')
+        if not otp or user.otp != otp:
+            return Response({'error': 'Invalid OTP.'}, status=status.HTTP_400_BAD_REQUEST)
+        pin = data.get('pin')
+        confirm_pin = data.get('confirm_pin')
+        if not pin or not confirm_pin:
+            return Response({'error': 'PIN and confirm PIN are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if pin != confirm_pin:
+            return Response({'error': 'PINs do not match.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not pin.isdigit() or len(pin) != 6:
+            return Response({'error': 'PIN must be a 6-digit number.'}, status=status.HTTP_400_BAD_REQUEST)
+        # Create wallet
         wallet = Wallet.objects.create(user=user, pin=pin)
         # Optionally clear OTP after use
         user.otp = None
@@ -1042,3 +1052,30 @@ class WalletRazorpayDepositConfirmView(APIView):
             description=f'Razorpay deposit, payment_id: {payment_id}',
         )
         return Response({'message': 'Deposit successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
+
+class GetWalletIdView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="Get the wallet_id of the logged-in user.",
+        responses={
+            200: openapi.Response(
+                description="Wallet ID returned",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'wallet_id': openapi.Schema(type=openapi.TYPE_STRING),
+                    }
+                )
+            ),
+            404: "Wallet not found"
+        }
+    )
+    def get(self, request):
+        user = request.user
+        from core.models import Wallet
+        try:
+            wallet = Wallet.objects.get(user=user)
+            return Response({'wallet_id': wallet.wallet_id}, status=status.HTTP_200_OK)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
