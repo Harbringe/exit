@@ -1,5 +1,8 @@
 from django.urls import path
 from . import views
+from .views import (
+    EventListView, EventCreateView, EventRSVPCreateUpdateView, EventRSVPListView,
+)
 
 app_name = 'api'
 
@@ -34,4 +37,10 @@ urlpatterns = [
     path('wallet/deposit/initiate/', views.WalletRazorpayDepositInitiateView.as_view(), name='wallet_deposit_initiate'),
     path('wallet/deposit/confirm/', views.WalletRazorpayDepositConfirmView.as_view(), name='wallet_deposit_confirm'),
     path('wallet/id/', views.GetWalletIdView.as_view(), name='wallet_id'),
-] 
+
+    # Event endpoints
+    path('events/', EventListView.as_view(), name='event_list'),
+    path('events/create/', EventCreateView.as_view(), name='event_create'),
+    path('events/<int:event_id>/rsvp/', EventRSVPCreateUpdateView.as_view(), name='event_rsvp'),
+    path('events/rsvps/', EventRSVPListView.as_view(), name='event_rsvp_list'),
+]

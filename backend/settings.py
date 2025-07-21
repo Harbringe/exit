@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     "core",
     "userauths",
     "api",
+    "vendor",
 ]
 
 MIDDLEWARE = [

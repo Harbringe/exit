@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from userauths.models import User, UserProfile
-from core.models import Wallet
+from core.models import Wallet, Event, EventRSVP
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for User model"""
@@ -334,3 +334,13 @@ class OnboardingSerializer(serializers.ModelSerializer):
         self.fields['country'].required = False
         self.fields['about'].required = False
         self.fields['age'].required = False 
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'
+
+class EventRSVPSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventRSVP
+        fields = '__all__' 

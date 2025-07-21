@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 import uuid
 import shortuuid
+from django.utils import timezone
 
 # Create your models here.
 
@@ -90,3 +91,39 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type.title()} of {self.amount} for Wallet {self.wallet.wallet_id} ({self.status})"
+
+class Event(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    image = models.ImageField(upload_to='event_images/', blank=True, null=True)
+    location = models.CharField(max_length=255)
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField()
+    capacity = models.PositiveIntegerField()
+    token_cost = models.PositiveIntegerField(default=0)
+    token_reward = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_events')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.title
+
+class EventRSVP(models.Model):
+    RSVP_STATUS_CHOICES = [
+        ('interested', 'Interested'),
+        ('confirmed', 'Confirmed'),
+        ('attended', 'Attended'),
+        ('noshow', 'No Show'),
+    ]
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='event_rsvps')
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='rsvps')
+    status = models.CharField(max_length=10, choices=RSVP_STATUS_CHOICES, default='interested')
+    rsvp_time = models.DateTimeField(default=timezone.now)
+    attended_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('user', 'event')
+
+    def __str__(self):
+        return f"{self.user} RSVP for {self.event}: {self.status}"

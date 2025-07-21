@@ -21,8 +21,31 @@ from twilio.rest import Client
 import requests
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To, HtmlContent, Content
-from core.models import Wallet, Transaction
+from core.models import Wallet, Transaction, Event, EventRSVP
 import razorpay
+from .serializers import (
+    UserRegistrationSerializer,
+    UserLoginSerializer,
+    UserProfileSerializer,
+    PasswordResetSerializer,
+    PasswordResetConfirmSerializer,
+    ChangePasswordSerializer,
+    UserSerializer,
+    MobileTokenObtainSerializer,
+    MobilePasswordResetSerializer,
+    MobilePasswordResetConfirmSerializer,
+    MobileChangePasswordSerializer,
+    WalletCreateSerializer,
+    WalletDepositSerializer,
+    WalletWithdrawSerializer,
+    WalletBalanceSerializer,
+    WalletGenerateOtpSerializer,
+    WalletRazorpayDepositInitiateSerializer,
+    WalletRazorpayDepositConfirmSerializer,
+    OnboardingSerializer,
+    EventSerializer,
+    EventRSVPSerializer,
+)
 
 # Utility function to send SMS via Twilio
 def send_otp_sms(phone_number, otp):
@@ -1079,3 +1102,94 @@ class GetWalletIdView(APIView):
             return Response({'wallet_id': wallet.wallet_id}, status=status.HTTP_200_OK)
         except Wallet.DoesNotExist:
             return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+class EventListView(generics.ListAPIView):
+    queryset = Event.objects.all().order_by('-start_datetime')
+    serializer_class = EventSerializer
+    permission_classes = [permissions.AllowAny]
+
+    @swagger_auto_schema(
+        operation_description="List all events. Publicly accessible.",
+        responses={
+            200: openapi.Response(
+                description="List of events",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_OBJECT)
+                )
+            )
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+class EventCreateView(generics.CreateAPIView):
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
+    permission_classes = [permissions.IsAdminUser]
+
+    @swagger_auto_schema(
+        operation_description="Create a new event. Admin only.",
+        request_body=EventSerializer,
+        responses={
+            201: openapi.Response(description="Event created successfully", schema=EventSerializer),
+            400: "Invalid input"
+        }
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+class EventRSVPCreateUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="RSVP or update RSVP for an event. Authenticated users only. Status can be: interested, confirmed, attended, noshow.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'status': openapi.Schema(type=openapi.TYPE_STRING, description='RSVP status (interested, confirmed, attended, noshow)')
+            },
+            required=['status']
+        ),
+        responses={
+            200: openapi.Response(description="RSVP created/updated", schema=EventRSVPSerializer),
+            400: "Invalid input"
+        }
+    )
+    def post(self, request, event_id):
+        event = generics.get_object_or_404(Event, id=event_id)
+        rsvp, created = EventRSVP.objects.get_or_create(user=request.user, event=event)
+        status_val = request.data.get('status', 'interested')
+        if status_val not in dict(EventRSVP.RSVP_STATUS_CHOICES):
+            return Response({'error': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
+        rsvp.status = status_val
+        if status_val == 'attended':
+            rsvp.attended_at = timezone.now()
+        rsvp.save()
+        return Response(EventRSVPSerializer(rsvp).data)
+
+class EventRSVPListView(generics.ListAPIView):
+    serializer_class = EventRSVPSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @swagger_auto_schema(
+        operation_description="List RSVPs. Filter by event_id or user_id as query params. Authenticated users only.",
+        manual_parameters=[
+            openapi.Parameter('event_id', openapi.IN_QUERY, description="Event ID to filter RSVPs", type=openapi.TYPE_INTEGER),
+            openapi.Parameter('user_id', openapi.IN_QUERY, description="User ID to filter RSVPs", type=openapi.TYPE_INTEGER),
+        ],
+        responses={
+            200: openapi.Response(
+                description="List of RSVPs",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(type=openapi.TYPE_OBJECT)
+                )
+            )
+        }
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
