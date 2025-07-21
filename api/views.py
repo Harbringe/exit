@@ -68,9 +68,12 @@ def send_email_with_sendgrid(to_email, subject, html_content, text_content=None,
         return False
 
 # Utility function to send OTP email using SendGrid
-def send_otp_email(email, otp):
+def send_otp_email(email, otp, context=None):
     subject = "Your OTP Code"
-    html_content = f"<p>Your OTP is: <strong>{otp}</strong></p>"
+    # Use a custom HTML template for the email
+    context = context or {}
+    context.update({'otp': otp, 'email': email})
+    html_content = render_to_string('emails/password_reset_otp.html', context)
     text_content = f"Your OTP is: {otp}"
     return send_email_with_sendgrid(email, subject, html_content, text_content)
 
@@ -314,8 +317,8 @@ class PasswordResetView(APIView):
                 otp = ''.join(random.choices(string.digits, k=6))
                 user.otp = otp
                 user.save()
-                # Send OTP email using SendGrid
-                sent = send_otp_email(email, otp)
+                # Send OTP email using custom template
+                sent = send_otp_email(email, otp, context={'user': user})
                 if sent:
                     return Response({
                         'message': 'Password reset email sent successfully'
