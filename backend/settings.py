@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 from pathlib import Path
 import os 
 from datetime import timedelta
+import dj_database_url
 from environs import Env
 env = Env()
 env.read_env()
@@ -112,19 +113,19 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
-}
-
 # DATABASES = {
-#     'default': dj_database_url.parse(
-#         env("DB_CONN_URL"),
-#         conn_max_age=600
-#     )
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": BASE_DIR / "db.sqlite3",
+#     }
 # }
+
+DATABASES = {
+    'default': dj_database_url.parse(
+        env("DB_CONN_URL"),
+        conn_max_age=600
+    )
+}
 
 
 # Password validation
