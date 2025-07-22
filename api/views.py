@@ -1259,10 +1259,9 @@ class EventRSVPListView(generics.ListAPIView):
     queryset = EventRSVP.objects.all()
 
     @swagger_auto_schema(
-        operation_description="List RSVPs. Filter by event_id or user_id as query params. Authenticated users only. Each RSVP includes QR data and QR code base64.",
+        operation_description="List RSVPs for the authenticated user. Filter by event_id as query param. Each RSVP includes QR data and QR code base64.",
         manual_parameters=[
             openapi.Parameter('event_id', openapi.IN_QUERY, description="Event ID to filter RSVPs", type=openapi.TYPE_INTEGER),
-            openapi.Parameter('user_id', openapi.IN_QUERY, description="User ID to filter RSVPs", type=openapi.TYPE_INTEGER),
         ],
         responses={
             200: openapi.Response(
@@ -1275,13 +1274,14 @@ class EventRSVPListView(generics.ListAPIView):
         }
     )
     def get(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        # Start with user's RSVPs only
+        queryset = self.get_queryset().filter(user=request.user)
+        
+        # Filter by event if provided
         event_id = request.query_params.get('event_id')
-        user_id = request.query_params.get('user_id')
         if event_id:
             queryset = queryset.filter(event__id=event_id)
-        if user_id:
-            queryset = queryset.filter(user__id=user_id)
+        
         data = []
         for rsvp in queryset:
             event = rsvp.event
