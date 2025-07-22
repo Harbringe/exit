@@ -73,10 +73,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = [
             'id', 'user', 'user_email', 'image', 'full_name',
-            'country', 'about', 'date_of_birth', 'gender', 'user_type', 'phone_number', 'display_name',
+            'country', 'about', 'date_of_birth', 'gender', 'age', 'user_type', 'phone_number', 'display_name',
             'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'user', 'user_email', 'display_name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'user_email', 'display_name', 'created_at', 'updated_at', 'user_type', 'phone_number']
     
     def validate_image(self, value):
         """Validate image file"""
@@ -331,9 +331,9 @@ class OnboardingSerializer(serializers.ModelSerializer):
         self.fields['image'].required = True
         self.fields['date_of_birth'].required = True
         self.fields['gender'].required = True
-        self.fields['country'].required = False
-        self.fields['about'].required = False
-        self.fields['age'].required = False 
+        self.fields['country'].required = True
+        self.fields['about'].required = True
+        self.fields['age'].required = True 
 
 class EventSerializer(serializers.ModelSerializer):
     class Meta:

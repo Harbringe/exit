@@ -1,7 +1,10 @@
 from django.urls import path
 from . import views
 from .views import (
-    EventListView, EventCreateView, EventRSVPCreateUpdateView, EventRSVPListView,
+    EventListView, EventCreateView, EventRSVPCreateView, EventRSVPUpdateView, ProcessEventRewardsView,
+    WalletRazorpayDepositInitiateView, WalletRazorpayDepositConfirmView,
+    EventRSVPListView,
+    UserProfileRetrieveView, UserProfileUpdateView,
 )
 
 app_name = 'api'
@@ -24,7 +27,8 @@ urlpatterns = [
     path('user/password-change/mobile/', views.MobileChangePasswordView.as_view(), name='user_password_change_mobile'),
 
     # User profile management
-    path('user/profile/<int:user_id>/', views.UserProfileView.as_view(), name='profile'),
+    path('user/profile/<int:user_id>/', UserProfileRetrieveView.as_view(), name='profile_get'),
+    path('user/profile/<int:user_id>/update/', UserProfileUpdateView.as_view(), name='profile_update'),
     path('user/onboarding/', views.OnboardingView.as_view(), name='user_onboarding'),
     path('user/onboarding-status/', views.CheckOnboardingStatusView.as_view(), name='user_onboarding_status'),
 
@@ -36,10 +40,14 @@ urlpatterns = [
     path('wallet/id/', views.GetWalletIdView.as_view(), name='wallet_id'),
     path('wallet/balance/', views.WalletBalanceView.as_view(), name='wallet_balance'),
     path('wallet/transactions/', views.WalletTransactionListView.as_view(), name='wallet_transactions'),
+    path('wallet/razorpay/deposit/initiate/', WalletRazorpayDepositInitiateView.as_view(), name='wallet_razorpay_deposit_initiate'),
+    path('wallet/razorpay/deposit/confirm/', WalletRazorpayDepositConfirmView.as_view(), name='wallet_razorpay_deposit_confirm'),
 
     # Event endpoints
     path('events/', EventListView.as_view(), name='event_list'),
     path('events/create/', EventCreateView.as_view(), name='event_create'),
-    path('events/<int:event_id>/rsvp/', EventRSVPCreateUpdateView.as_view(), name='event_rsvp'),
+    path('events/<int:event_id>/rsvp/', EventRSVPCreateView.as_view(), name='event_rsvp_create'),
+    path('events/rsvp/update/', EventRSVPUpdateView.as_view(), name='event_rsvp_update'),
+    path('events/<int:event_id>/process_rewards/', ProcessEventRewardsView.as_view(), name='process_event_rewards'),
     path('events/rsvps/', EventRSVPListView.as_view(), name='event_rsvp_list'),
 ]

@@ -46,6 +46,12 @@ from .serializers import (
     EventSerializer,
     EventRSVPSerializer,
 )
+from rest_framework.permissions import BasePermission
+from django.utils import timezone
+import qrcode
+import io
+import json
+import base64
 
 # Utility function to send SMS via Twilio
 def send_otp_sms(phone_number, otp):
@@ -147,6 +153,14 @@ def get_tokens_for_user_with_userinfo(user):
         'refresh': str(refresh),
     }
 
+
+class IsUserTypeAdmin(BasePermission):
+    """
+    Allows access only to users with user_type == 'Admin'.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and getattr(request.user, 'user_type', None) == 'Admin')
+
 class UserRegistrationView(APIView):
     """
     User registration endpoint
@@ -243,13 +257,9 @@ class UserLoginView(APIView):
                 }, status=status.HTTP_401_UNAUTHORIZED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class UserProfileView(APIView):
-    """
-    User profile management
-    """
-    # permission_classes = [permissions.IsAuthenticated]
-    permission_classes = []
-    
+class UserProfileRetrieveView(APIView):
+    permission_classes = []  # Unauthenticated
+
     @swagger_auto_schema(
         operation_description="Get user profile by user_id",
         responses={
@@ -287,33 +297,14 @@ class UserProfileView(APIView):
         except UserProfile.DoesNotExist:
             return Response({'error': 'Profile not found'}, status=status.HTTP_404_NOT_FOUND)
 
+class UserProfileUpdateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
     @swagger_auto_schema(
-        operation_description="Update user profile by user_id",
-        request_body=UserProfileSerializer,
+        operation_description="Update user profile by user_id. Uses OnboardingSerializer for validation and required fields.",
+        request_body=OnboardingSerializer,
         responses={
-            200: openapi.Response(
-                description="Profile updated successfully",
-                schema=openapi.Schema(
-                    type=openapi.TYPE_OBJECT,
-                    properties={
-                        'id': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'user': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'user_email': openapi.Schema(type=openapi.TYPE_STRING),
-                        'image': openapi.Schema(type=openapi.TYPE_STRING),
-                        'full_name': openapi.Schema(type=openapi.TYPE_STRING),
-                        'country': openapi.Schema(type=openapi.TYPE_STRING),
-                        'about': openapi.Schema(type=openapi.TYPE_STRING),
-                        'date_of_birth': openapi.Schema(type=openapi.TYPE_STRING),
-                        'first_name': openapi.Schema(type=openapi.TYPE_STRING),
-                        'last_name': openapi.Schema(type=openapi.TYPE_STRING),
-                        'gender': openapi.Schema(type=openapi.TYPE_STRING),
-                        'age': openapi.Schema(type=openapi.TYPE_INTEGER),
-                        'user_type': openapi.Schema(type=openapi.TYPE_STRING),
-                        'phone_number': openapi.Schema(type=openapi.TYPE_STRING),
-                        'display_name': openapi.Schema(type=openapi.TYPE_STRING),
-                    }
-                )
-            ),
+            200: openapi.Response(description="Profile updated successfully", schema=OnboardingSerializer),
             400: "Bad Request",
             404: "Profile not found"
         }
@@ -321,7 +312,7 @@ class UserProfileView(APIView):
     def put(self, request, user_id):
         try:
             profile = UserProfile.objects.get(user__id=user_id)
-            serializer = UserProfileSerializer(profile, data=request.data, partial=True)
+            serializer = OnboardingSerializer(profile, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_200_OK)
@@ -1134,10 +1125,10 @@ class EventListView(generics.ListAPIView):
 class EventCreateView(generics.CreateAPIView):
     queryset = Event.objects.all()
     serializer_class = EventSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsUserTypeAdmin]
 
     @swagger_auto_schema(
-        operation_description="Create a new event. Admin only.",
+        operation_description="Create a new event. Admin user_type only.",
         request_body=EventSerializer,
         responses={
             201: openapi.Response(description="Event created successfully", schema=EventSerializer),
@@ -1150,48 +1141,132 @@ class EventCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
-class EventRSVPCreateUpdateView(APIView):
+class EventRSVPCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     @swagger_auto_schema(
-        operation_description="RSVP or update RSVP for an event. Authenticated users only. Status can be: interested, confirmed, attended, noshow.",
+        operation_description="Register (RSVP) for an event. Only 'confirmed' status is allowed. User must provide wallet PIN. Deducts token_cost from user wallet and credits to event creator's wallet. Returns QR code on success.",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
-                'status': openapi.Schema(type=openapi.TYPE_STRING, description='RSVP status (interested, confirmed, attended, noshow)')
+                'status': openapi.Schema(type=openapi.TYPE_STRING, description="RSVP status (must be 'confirmed' for registration)"),
+                'pin': openapi.Schema(type=openapi.TYPE_STRING, description="6-digit wallet PIN"),
             },
-            required=['status']
+            required=['status', 'pin']
         ),
         responses={
-            200: openapi.Response(description="RSVP created/updated", schema=EventRSVPSerializer),
-            400: "Invalid input"
+            200: openapi.Response(description="RSVP created and QR code returned"),
+            400: "Invalid input, insufficient balance, or wrong PIN"
         }
     )
     def post(self, request, event_id):
         event = generics.get_object_or_404(Event, id=event_id)
-        rsvp, created = EventRSVP.objects.get_or_create(user=request.user, event=event)
-        status_val = request.data.get('status', 'interested')
-        if status_val not in dict(EventRSVP.RSVP_STATUS_CHOICES):
-            return Response({'error': 'Invalid status.'}, status=status.HTTP_400_BAD_REQUEST)
-        rsvp.status = status_val
-        if status_val == 'attended':
-            rsvp.attended_at = timezone.now()
+        status_val = request.data.get('status', 'confirmed')
+        pin = request.data.get('pin')
+        if status_val != 'confirmed':
+            return Response({'error': "Only 'confirmed' status is allowed for registration."}, status=status.HTTP_400_BAD_REQUEST)
+        if EventRSVP.objects.filter(user=request.user, event=event, status='confirmed').exists():
+            return Response({'error': 'You have already registered for this event.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user_wallet = Wallet.objects.get(user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'User wallet not found.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not pin or user_wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        if user_wallet.balance < event.token_cost:
+            return Response({'error': 'Insufficient wallet balance.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            admin_wallet = Wallet.objects.get(user=event.created_by)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Admin wallet not found.'}, status=status.HTTP_400_BAD_REQUEST)
+        user_wallet.withdraw(event.token_cost)
+        admin_wallet.deposit(event.token_cost)
+        Transaction.objects.create(
+            wallet=user_wallet,
+            amount=event.token_cost,
+            transaction_type='withdraw',
+            status='completed',
+            description=f'Event registration for {event.title}',
+        )
+        Transaction.objects.create(
+            wallet=admin_wallet,
+            amount=event.token_cost,
+            transaction_type='deposit',
+            status='completed',
+            description=f'Received event registration for {event.title}',
+        )
+        rsvp = EventRSVP.objects.create(user=request.user, event=event, status='confirmed')
+        qr_data = {
+            'event_id': event.id,
+            'event_title': event.title,
+            'user_id': request.user.id,
+            'rsvp_id': rsvp.id,
+            'status': rsvp.status,
+        }
+        qr_json = json.dumps(qr_data)
+        qr_img = qrcode.make(qr_json)
+        buf = io.BytesIO()
+        qr_img.save(buf, format='PNG')
+        buf.seek(0)
+        qr_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        return Response({
+            'event': EventSerializer(event).data,
+            'rsvp': EventRSVPSerializer(rsvp).data,
+            'qr_code_base64': qr_base64,
+        }, status=status.HTTP_200_OK)
+
+class EventRSVPUpdateView(APIView):
+    permission_classes = [IsUserTypeAdmin]
+
+    @swagger_auto_schema(
+        operation_description="Update RSVP status to 'attended'. Only accessible by admin. Expects the full QR JSON as sent in RSVP create.",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'qr_json': openapi.Schema(type=openapi.TYPE_STRING, description="QR JSON string from RSVP create response"),
+                'status': openapi.Schema(type=openapi.TYPE_STRING, description="RSVP status (must be 'attended')"),
+            },
+            required=['qr_json', 'status']
+        ),
+        responses={
+            200: openapi.Response(description="RSVP status updated", schema=EventRSVPSerializer),
+            400: "Invalid input or not allowed"
+        }
+    )
+    def post(self, request):
+        qr_json = request.data.get('qr_json')
+        status_val = request.data.get('status', 'attended')
+        if not qr_json:
+            return Response({'error': 'QR JSON is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            qr_data = json.loads(qr_json)
+            rsvp_id = qr_data.get('rsvp_id')
+        except Exception:
+            return Response({'error': 'Invalid QR JSON.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not rsvp_id:
+            return Response({'error': 'RSVP ID missing in QR JSON.'}, status=status.HTTP_400_BAD_REQUEST)
+        if status_val != 'attended':
+            return Response({'error': "Only 'attended' status update is allowed here."}, status=status.HTTP_400_BAD_REQUEST)
+        rsvp = generics.get_object_or_404(EventRSVP, id=rsvp_id)
+        rsvp.status = 'attended'
+        rsvp.attended_at = timezone.now()
         rsvp.save()
-        return Response(EventRSVPSerializer(rsvp).data)
+        return Response(EventRSVPSerializer(rsvp).data, status=status.HTTP_200_OK)
 
 class EventRSVPListView(generics.ListAPIView):
     serializer_class = EventRSVPSerializer
     permission_classes = [permissions.IsAuthenticated]
+    queryset = EventRSVP.objects.all()
 
     @swagger_auto_schema(
-        operation_description="List RSVPs. Filter by event_id or user_id as query params. Authenticated users only.",
+        operation_description="List RSVPs. Filter by event_id or user_id as query params. Authenticated users only. Each RSVP includes QR data and QR code base64.",
         manual_parameters=[
             openapi.Parameter('event_id', openapi.IN_QUERY, description="Event ID to filter RSVPs", type=openapi.TYPE_INTEGER),
             openapi.Parameter('user_id', openapi.IN_QUERY, description="User ID to filter RSVPs", type=openapi.TYPE_INTEGER),
         ],
         responses={
             200: openapi.Response(
-                description="List of RSVPs",
+                description="List of RSVPs with QR data and QR code base64",
                 schema=openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Schema(type=openapi.TYPE_OBJECT)
@@ -1200,7 +1275,36 @@ class EventRSVPListView(generics.ListAPIView):
         }
     )
     def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
+        queryset = self.get_queryset()
+        event_id = request.query_params.get('event_id')
+        user_id = request.query_params.get('user_id')
+        if event_id:
+            queryset = queryset.filter(event__id=event_id)
+        if user_id:
+            queryset = queryset.filter(user__id=user_id)
+        data = []
+        for rsvp in queryset:
+            event = rsvp.event
+            qr_data = {
+                'event_id': event.id,
+                'event_title': event.title,
+                'user_id': rsvp.user.id,
+                'rsvp_id': rsvp.id,
+                'status': rsvp.status,
+            }
+            # Generate QR code base64
+            qr_json = json.dumps(qr_data)
+            qr_img = qrcode.make(qr_json)
+            buf = io.BytesIO()
+            qr_img.save(buf, format='PNG')
+            buf.seek(0)
+            qr_code_base64 = base64.b64encode(buf.read()).decode('utf-8')
+            rsvp_data = EventRSVPSerializer(rsvp).data
+            rsvp_data['qr_data'] = qr_data
+            rsvp_data['qr_code_base64'] = qr_code_base64
+            rsvp_data['event'] = EventSerializer(event).data
+            data.append(rsvp_data)
+        return Response(data, status=status.HTTP_200_OK)
 
 class CheckOnboardingStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -1221,3 +1325,38 @@ class CheckOnboardingStatusView(APIView):
     )
     def get(self, request):
         return Response({'onboardingStatus': request.user.onboardingStatus}, status=status.HTTP_200_OK)
+
+class ProcessEventRewardsView(APIView):
+    permission_classes = [IsUserTypeAdmin]
+
+    @swagger_auto_schema(
+        operation_description="Process rewards and no-shows for a specific event. Admin only.",
+        responses={
+            200: openapi.Response(description="Rewards processed and no-shows updated."),
+            404: "Event not found"
+        }
+    )
+    def post(self, request, event_id):
+        event = generics.get_object_or_404(Event, id=event_id)
+        # Process no-shows
+        confirmed_rsvps = EventRSVP.objects.filter(event=event, status='confirmed')
+        for rsvp in confirmed_rsvps:
+            rsvp.status = 'no show'
+            rsvp.save()
+        # Process rewards
+        attended_rsvps = EventRSVP.objects.filter(event=event, status='attended')
+        for rsvp in attended_rsvps:
+            try:
+                wallet = Wallet.objects.get(user=rsvp.user)
+                wallet.deposit(event.token_reward)
+                Transaction.objects.create(
+                    wallet=wallet,
+                    amount=event.token_reward,
+                    transaction_type='deposit',
+                    status='completed',
+                    description=f'Reward for attending event {event.title}',
+                )
+            except Wallet.DoesNotExist:
+                pass
+        return Response({'message': 'Rewards processed and no-shows updated.'}, status=status.HTTP_200_OK)
+
