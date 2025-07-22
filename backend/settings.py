@@ -283,11 +283,15 @@ CORS_ALLOWED_ORIGINS = [
     "exp://192.168.101.7:8081",
     "http://192.168.101.7:8081",
     "http://192.168.101.7:8000",
+    'https://checkout.razorpay.com', 
+    'https://api.razorpay.com',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://vauice-backend.onrender.com/',
+    # 'https://vauice-backend.onrender.com/',
     'http://127.0.0.1:3000/'
+    'https://checkout.razorpay.com', 
+    'https://api.razorpay.com',
 ]
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CORS_ALLOWED_HEADERS = [
