@@ -22,10 +22,10 @@ TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
 TWILIO_PHONE_NUMBER = os.environ.get('TWILIO_PHONE_NUMBER')
 
-# Mailgun configuration
-MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY')
-MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
-MAILGUN_FROM_EMAIL = os.environ.get('MAILGUN_FROM_EMAIL')
+# # Mailgun configuration
+# MAILGUN_API_KEY = os.environ.get('MAILGUN_API_KEY')
+# MAILGUN_DOMAIN = os.environ.get('MAILGUN_DOMAIN')
+# MAILGUN_FROM_EMAIL = os.environ.get('MAILGUN_FROM_EMAIL')
 
 # SendGrid configuration
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
