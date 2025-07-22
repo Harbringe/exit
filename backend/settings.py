@@ -51,7 +51,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["https://exit-13ut.onrender.com",'localhost', '127.0.0.1', '192.168.57.30', '192.168.101.4']
+ALLOWED_HOSTS = ["exit-13ut.onrender.com",'localhost', '127.0.0.1', '192.168.57.30', '192.168.101.4']
 
 # Application definition
 
