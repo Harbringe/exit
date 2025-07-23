@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.utils import timezone
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
 import uuid
 
 # Create your models here.

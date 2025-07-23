@@ -1,28 +1,40 @@
-from rest_framework import status, generics, permissions
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-from rest_framework_simplejwt.views import TokenObtainPairView
+import random
+import string
+import io
+import json
+import base64
+
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
-from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from django.utils.encoding import force_bytes, force_str
-from django.contrib.sites.shortcuts import get_current_site
-from django.template.loader import render_to_string
 from django.core.mail import send_mail
-from django.conf import settings
-import random
-import string
+from django.template.loader import render_to_string
+from django.utils import timezone
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from django.contrib.sites.shortcuts import get_current_site
+
+from rest_framework import generics, permissions, status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.views import TokenObtainPairView
+
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from twilio.rest import Client
 import requests
+import razorpay
+import qrcode
 import sendgrid
 from sendgrid.helpers.mail import Mail, Email, To, HtmlContent, Content
+
 from core.models import Wallet, Transaction, Event, EventRSVP
-import razorpay
+
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
@@ -46,12 +58,7 @@ from .serializers import (
     EventSerializer,
     EventRSVPSerializer,
 )
-from rest_framework.permissions import BasePermission
-from django.utils import timezone
-import qrcode
-import io
-import json
-import base64
+
 
 # Utility function to send SMS via Twilio
 def send_otp_sms(phone_number, otp):

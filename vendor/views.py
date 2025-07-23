@@ -1,25 +1,28 @@
-from django.shortcuts import render
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import permissions, status
-from rest_framework.permissions import IsAuthenticated
-from django.http import HttpResponse
-from .models import VendorProfile
-from core.models import Wallet
-import qrcode
 import io
 import json
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.utils import timezone
+
+import qrcode
+from rest_framework import generics, permissions, status
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import KYC
-from rest_framework import generics
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAdminUser, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .serializers import KYCSerializer, CategorySerializer, VendorProfileSerializer
-from django.utils import timezone
-from .models import Category
-from .serializers import ProductSerializer
-from .models import Product
+
+from .models import VendorProfile, KYC, Category, Product
+from core.models import Wallet
+
+from .serializers import (
+    KYCSerializer,
+    CategorySerializer,
+    VendorProfileSerializer,
+    ProductSerializer,
+)
+
 
 # Create your views here.
 
