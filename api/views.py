@@ -1071,7 +1071,7 @@ class WalletRazorpayDepositConfirmView(APIView):
             amount=amount,
             transaction_type='deposit',
             status='completed',
-            description=f'Razorpay deposit, payment_id: {payment_id}',
+            description=f'Wallet topup via Razorpay, payment_id: {payment_id}',
         )
         return Response({'message': 'Deposit successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
 
