@@ -26,11 +26,11 @@ from django.http import HttpResponse
 
 schema_view = get_schema_view(
    openapi.Info(
-      title="Web3 LMS Backend APIs",
+      title="eXit Backend APIs",
       default_version='v1',
-      description="This is the API documentation for Web3 based LMS project APIs",
+      description="This is the API documentation for eXit project APIs",
       terms_of_service="https://www.google.com/policies/terms/",
-      contact=openapi.Contact(email="aaditya@gmail.com"),
+      contact=openapi.Contact(email="aadityamehetre@icloud.com"),
       license=openapi.License(name="BSD License"),
    ),
    public=True,

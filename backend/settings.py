@@ -175,11 +175,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 JAZZMIN_SETTINGS  = {
     "site_title": "Admin Panel",
-    "site_header": "WEB3 LMS",
-    "site_brand": "WEB3LMS",
+    "site_header": "Exit Backend",
+    "site_brand": "Exit Backend",
     # "site_logo": "path-to-logo",
-    "welcome_sign": "Welcome to the Web3 LMS",
-    "copyright": "",
+    "welcome_sign": "Welcome to the Exit Backend",
+    "copyright": "Exit Backend",
     "show_ui_builder": True,
 }
 
