@@ -65,6 +65,8 @@ class Transaction(models.Model):
         ('deposit', 'Deposit'),
         ('withdraw', 'Withdraw'),
         ('transfer', 'Transfer'),
+        ('spend', 'Spend'),  # For purchasing event tickets and stuff
+        ('receive', 'Receive'),  # For receiving payments by event manager/admin/creator
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),

@@ -43,6 +43,9 @@ urlpatterns = [
     path('wallet/transactions/', views.WalletTransactionListView.as_view(), name='wallet_transactions'),
     path('wallet/razorpay/deposit/initiate/', WalletRazorpayDepositInitiateView.as_view(), name='wallet_razorpay_deposit_initiate'),
     path('wallet/razorpay/deposit/confirm/', WalletRazorpayDepositConfirmView.as_view(), name='wallet_razorpay_deposit_confirm'),
+    path('wallet/spend/', views.WalletSpendView.as_view(), name='wallet_spend'),
+    path('wallet/receive/', views.WalletReceiveView.as_view(), name='wallet_receive'),
+    path('wallet/transfer/', views.WalletTransferView.as_view(), name='wallet_transfer'),
 
     # Event endpoints
     path('events/', EventListView.as_view(), name='event_list'),

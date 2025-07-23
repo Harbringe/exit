@@ -346,3 +346,19 @@ class EventRSVPSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventRSVP
         fields = '__all__' 
+
+class WalletSpendSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6)
+
+class WalletReceiveSerializer(serializers.Serializer):
+    wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6) 
+
+class WalletTransferSerializer(serializers.Serializer):
+    sender_wallet_id = serializers.CharField()
+    receiver_wallet_id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=20, decimal_places=2)
+    pin = serializers.CharField(min_length=6, max_length=6) 

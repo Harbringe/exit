@@ -57,6 +57,9 @@ from .serializers import (
     OnboardingSerializer,
     EventSerializer,
     EventRSVPSerializer,
+    WalletSpendSerializer,
+    WalletReceiveSerializer,
+    WalletTransferSerializer,
 )
 
 
@@ -924,6 +927,76 @@ class WalletWithdrawView(APIView):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'message': 'Withdrawal successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
 
+class WalletSpendView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Spend funds from a wallet (e.g., for event tickets or products). Accepts JSON: { 'wallet_id': '...', 'amount': 100, 'pin': '123456' }",
+        request_body=WalletSpendSerializer,
+        responses={
+            200: openapi.Response(description="Spend successful"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletSpendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wallet.withdraw(amount)
+            Transaction.objects.create(
+                wallet=wallet,
+                amount=amount,
+                transaction_type='spend',
+                status='completed',
+                description='Spend from wallet',
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Spend successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
+
+class WalletReceiveView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Receive funds to a wallet (e.g., event manager receives payment). Accepts JSON: { 'wallet_id': '...', 'amount': 100, 'pin': '123456' }",
+        request_body=WalletReceiveSerializer,
+        responses={
+            200: openapi.Response(description="Receive successful"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletReceiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        wallet_id = serializer.validated_data['wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        try:
+            wallet = Wallet.objects.get(wallet_id=wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            wallet.deposit(amount)
+            Transaction.objects.create(
+                wallet=wallet,
+                amount=amount,
+                transaction_type='receive',
+                status='completed',
+                description='Receive to wallet',
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Receive successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
+
 class WalletTransactionListView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     @swagger_auto_schema(
@@ -1082,6 +1155,58 @@ class WalletRazorpayDepositConfirmView(APIView):
         )
         return Response({'message': 'Deposit successful', 'balance': str(wallet.balance)}, status=status.HTTP_200_OK)
 
+class WalletTransferView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    @swagger_auto_schema(
+        operation_description="Transfer funds from one wallet to another. Accepts JSON: { 'sender_wallet_id': '...', 'receiver_wallet_id': '...', 'amount': 100, 'pin': '123456' }",
+        request_body=WalletTransferSerializer,
+        responses={
+            200: openapi.Response(description="Transfer successful"),
+            400: "Invalid input",
+        }
+    )
+    def post(self, request):
+        serializer = WalletTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        sender_wallet_id = serializer.validated_data['sender_wallet_id']
+        receiver_wallet_id = serializer.validated_data['receiver_wallet_id']
+        amount = serializer.validated_data['amount']
+        pin = serializer.validated_data['pin']
+        if sender_wallet_id == receiver_wallet_id:
+            return Response({'error': 'Sender and receiver wallets must be different.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            sender_wallet = Wallet.objects.get(wallet_id=sender_wallet_id, user=request.user)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Sender wallet not found or not owned by user.'}, status=status.HTTP_404_NOT_FOUND)
+        if sender_wallet.pin != pin:
+            return Response({'error': 'Invalid wallet PIN.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            receiver_wallet = Wallet.objects.get(wallet_id=receiver_wallet_id)
+        except Wallet.DoesNotExist:
+            return Response({'error': 'Receiver wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if sender_wallet.balance < amount:
+            return Response({'error': 'Insufficient balance in sender wallet.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            sender_wallet.withdraw(amount)
+            receiver_wallet.deposit(amount)
+            Transaction.objects.create(
+                wallet=sender_wallet,
+                amount=amount,
+                transaction_type='spend',
+                status='completed',
+                description=f'Sent to {receiver_wallet.user.email} (wallet {receiver_wallet.wallet_id})',
+            )
+            Transaction.objects.create(
+                wallet=receiver_wallet,
+                amount=amount,
+                transaction_type='receive',
+                status='completed',
+                description=f'Received from {sender_wallet.user.email} (wallet {sender_wallet.wallet_id})',
+            )
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Transfer successful', 'sender_balance': str(sender_wallet.balance), 'receiver_balance': str(receiver_wallet.balance)}, status=status.HTTP_200_OK)
+
 class GetWalletIdView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -1191,14 +1316,14 @@ class EventRSVPCreateView(APIView):
         Transaction.objects.create(
             wallet=user_wallet,
             amount=event.token_cost,
-            transaction_type='withdraw',
+            transaction_type='spend',  # Changed from 'withdraw' to 'spend'
             status='completed',
             description=f'Event registration for {event.title}',
         )
         Transaction.objects.create(
             wallet=admin_wallet,
             amount=event.token_cost,
-            transaction_type='deposit',
+            transaction_type='receive',  # Changed from 'deposit' to 'receive'
             status='completed',
             description=f'Received event registration for {event.title}',
         )

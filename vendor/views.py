@@ -23,7 +23,6 @@ from .serializers import (
     ProductSerializer,
 )
 
-
 # Create your views here.
 
 class VendorQRView(APIView):
