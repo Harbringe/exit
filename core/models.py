@@ -3,6 +3,7 @@ from django.conf import settings
 import uuid
 import shortuuid
 from django.utils import timezone
+from decimal import Decimal
 
 # Create your models here.
 
@@ -38,7 +39,7 @@ class Wallet(models.Model):
             raise ValueError('Wallet is not active.')
         if amount <= 0:
             raise ValueError('Deposit amount must be positive.')
-        self.balance += amount
+        self.balance += Decimal(str(amount))
         self.save()
         return self.balance
 
