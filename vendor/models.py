@@ -74,3 +74,12 @@ class Product(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.vendor})"
+
+class CommissionCategory(models.Model):
+    category = models.OneToOneField('Category', on_delete=models.CASCADE, related_name='commission')
+    vendor_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text='Vendor commission percentage')
+    admin_percent = models.DecimalField(max_digits=5, decimal_places=2, help_text='Admin commission percentage')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Commission for {self.category.name}: Vendor {self.vendor_percent}%, Admin {self.admin_percent}%"

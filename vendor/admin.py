@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import VendorProfile, KYC, Category, Product
+from .models import VendorProfile, KYC, Category, Product, CommissionCategory
 
 admin.site.register(VendorProfile)
+admin.site.register(CommissionCategory)
 
 @admin.register(KYC)
 class KYCAdmin(admin.ModelAdmin):

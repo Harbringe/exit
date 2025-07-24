@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import KYC, Category, VendorProfile, Product
+from .models import KYC, Category, VendorProfile, Product, CommissionCategory
 
 class KYCSerializer(serializers.ModelSerializer):
     class Meta:
@@ -21,4 +21,10 @@ class VendorProfileSerializer(serializers.ModelSerializer):
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
-        fields = '__all__' 
+        fields = '__all__'
+
+class CommissionCategorySerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    class Meta:
+        model = CommissionCategory
+        fields = ['id', 'category', 'category_name', 'vendor_percent', 'admin_percent', 'updated_at'] 
