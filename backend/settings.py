@@ -38,6 +38,9 @@ SENDGRID_FROM_NAME = os.environ.get('SENDGRID_FROM_NAME')
 RAZORPAY_KEY_ID = os.environ.get('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET')
 
+# LocationIQ configuration
+LOCATIONIQ_API_KEY = os.environ.get('LOCATIONIQ_API_KEY')
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

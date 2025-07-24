@@ -15,7 +15,7 @@ class TransactionAdmin(admin.ModelAdmin):
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ('title', 'location', 'start_datetime', 'end_datetime', 'capacity', 'token_cost', 'token_reward', 'created_by', 'created_at')
+    list_display = ('title', 'location', 'latitude', 'longitude', 'start_datetime', 'end_datetime', 'capacity', 'token_cost', 'token_reward', 'created_by', 'created_at')
     search_fields = ('title', 'location', 'description')
     list_filter = ('start_datetime', 'end_datetime', 'location')
 

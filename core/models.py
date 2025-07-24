@@ -4,6 +4,7 @@ import uuid
 import shortuuid
 from django.utils import timezone
 from decimal import Decimal
+import requests
 
 # Create your models here.
 
@@ -100,6 +101,8 @@ class Event(models.Model):
     description = models.TextField()
     image = models.ImageField(upload_to='event_images/', blank=True, null=True)
     location = models.CharField(max_length=255)
+    latitude = models.FloatField(blank=True, null=True)
+    longitude = models.FloatField(blank=True, null=True)
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
     capacity = models.PositiveIntegerField()
@@ -108,6 +111,28 @@ class Event(models.Model):
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='created_events')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Geocode location if location is set and lat/lon are not set or location changed
+        if self.location:
+            try:
+                LOCATIONIQ_API_KEY = getattr(settings, 'LOCATIONIQ_API_KEY', None)
+                if LOCATIONIQ_API_KEY:
+                    url = 'https://us1.locationiq.com/v1/search'
+                    params = {
+                        'key': LOCATIONIQ_API_KEY,
+                        'q': self.location,
+                        'format': 'json'
+                    }
+                    response = requests.get(url, params=params, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, list) and len(data) > 0:
+                            self.latitude = float(data[0].get('lat'))
+                            self.longitude = float(data[0].get('lon'))
+            except Exception as e:
+                pass  # Optionally log the error
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title
