@@ -11,15 +11,15 @@ class UserProfileInline(admin.StackedInline):
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    list_display = ('id', 'email', 'user_type', 'phone_number', 'is_active', 'date_joined')
-    list_filter = ('user_type', 'is_active', 'is_staff', 'date_joined')
+    list_display = ('id', 'email', 'user_type', 'phone_number', 'is_active', 'date_joined', 'onboardingStatus')
+    list_filter = ('user_type', 'is_active', 'is_staff', 'date_joined', 'onboardingStatus')
     search_fields = ('email', 'phone_number')
     ordering = ('-date_joined',)
     
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('phone_number',)}),
-        ('Account Type', {'fields': ('user_type',)}),
+        ('Account Type', {'fields': ('user_type','onboardingStatus')}),
         ('Security', {'fields': ('otp', 'refresh_token')}),
         ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
