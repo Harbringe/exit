@@ -55,6 +55,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         """Create user with validated data"""
         validated_data.pop('password_confirm')
         user = User.objects.create_user(**validated_data)
+        if user.user_type == 'admin':
+            user.onboardingStatus = True
+            user.save()
         return user
 
 class UserLoginSerializer(serializers.Serializer):
