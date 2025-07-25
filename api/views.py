@@ -62,6 +62,8 @@ from .serializers import (
     WalletTransferSerializer,
 )
 
+from pytz import timezone as pytz_timezone
+
 
 # Utility function to send SMS via Twilio
 def send_otp_sms(phone_number, otp):
@@ -1235,9 +1237,12 @@ class GetWalletIdView(APIView):
             return Response({'error': 'Wallet not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 class EventListView(generics.ListAPIView):
-    queryset = Event.objects.all().order_by('-start_datetime')
     serializer_class = EventSerializer
     permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        now_ist = timezone.now()
+        return Event.objects.filter(start_datetime__gte=now_ist).order_by('-start_datetime')
 
     @swagger_auto_schema(
         operation_description="List all events. Publicly accessible.",
